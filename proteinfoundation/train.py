@@ -13,7 +13,6 @@ import sys
 
 root = os.path.abspath(".")
 sys.path.append(root)  # Adds project's root directory
-# isort: split
 
 import argparse
 import json
@@ -32,7 +31,7 @@ from loguru import logger
 from omegaconf import OmegaConf
 
 from proteinfoundation.proteinflow.proteina import Proteina
-from proteinfoundation.utils.ema_callback import EMA, EmaModelCheckpoint
+from proteinfoundation.utils.ema_utils.ema_callback import EMA, EmaModelCheckpoint
 from proteinfoundation.utils.fetch_last_ckpt import fetch_last_ckpt
 from proteinfoundation.utils.lora_utils import replace_lora_layers
 from proteinfoundation.utils.metric_utils import (

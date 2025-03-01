@@ -57,9 +57,6 @@ def kabsch_align_ind(mobile, target, mask=None, ret_both=False):
 
     Returns:
         mobile_aligned: mobile point cloud aligned to target, shape [n, 3]
-
-    TODO(tgeffner): Change _find_rot_alignment so that it works with any batch shape
-        so that we don't require these two different functions.
     """
     if mask is None:
         mask = torch.ones(mobile.shape[:-1]).bool()
@@ -175,9 +172,6 @@ def _find_rot_alignment(A, B, mask=None):
     )  # [b, 3, 3]
 
     # Handle the special reflection case
-    # det_R = torch.linalg.det(R)  # [b]
-    det_R = torch.linalg.det(R.to(torch.float32))  # [b], breaks with mixed precision
-    # det_R = torch.linalg.det(R)  # [b]
     det_R = torch.linalg.det(R.to(torch.float32))  # [b], breaks with mixed precision
     SS = torch.eye(3, device=R.device).repeat(A.shape[0], 1, 1)  # Shape [b, 3, 3]
     SS[:, -1, -1] = torch.where(

@@ -24,7 +24,7 @@ from jaxtyping import Bool, Float
 from loguru import logger
 from torch import Dict, Tensor
 
-from proteinfoundation.utils.pdb_utils.pdb_utils import mask_cath_code_by_level
+from proteinfoundation.utils.ff_utils.pdb_utils import mask_cath_code_by_level
 
 
 class ModelTrainerBase(L.LightningModule):
@@ -131,7 +131,7 @@ class ModelTrainerBase(L.LightningModule):
         so no big deal but just in case leaving a note.
         """
         if self.motif_conditioning and ("fixed_structure_mask" not in batch or "x_motif" not in batch):
-            batch.update(self.motif_factory(batch, zeroes = True)) #! for generation we have to pass conditioning info in. But for validation do the same as training
+            batch.update(self.motif_factory(batch, zeroes = True))  # for generation we have to pass conditioning info in. But for validation do the same as training
 
         nn_out = self.nn(batch)
         x_pred = self._nn_out_to_x_clean(nn_out, batch)
@@ -233,6 +233,7 @@ class ModelTrainerBase(L.LightningModule):
         """
         val_step = batch_idx == -1  # validation step is indicated with batch_idx -1
         log_prefix = "validation_loss" if val_step else "train"
+        
         # Extract inputs from batch (our dataloader)
         # This may apply augmentations, if requested in the config file
         x_1, mask, batch_shape, n, dtype = self.extract_clean_sample(batch)
@@ -329,12 +330,7 @@ class ModelTrainerBase(L.LightningModule):
 
             # For scaling laws
             b, n = mask.shape
-            try:
-                nflops_step = self.nn.nflops_computer(
-                    b, n
-                )  # nn should implement this function if we want to see nflops
-            except:
-                nflops_step = None
+            nflops_step = None
             if nflops_step is not None:
                 self.nflops = (
                     self.nflops + nflops_step * self.trainer.world_size

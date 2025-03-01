@@ -16,7 +16,6 @@ import numpy as np
 import torch
 from lightning.pytorch.callbacks import Callback
 
-# from pytorch_lightning.utilities.rank_zero import rank_zero_only  # Do not use here, breaks clsuter
 from loguru import logger
 
 
@@ -38,14 +37,9 @@ class CheckGradientsCallback(Callback):
 class LogEpochTimeCallback(Callback):
     """Simple callback that logs how long each epoch takes, in seconds, to a pytorch lightning log"""
 
-    # @rank_zero_only  # This decorator breaks the cluster, god knows why...
-    # Interenstingly (?) using the self.trainer.is_rank_zero attribute also breaks the cluster
-    # Interenstingly^2 when I run an interactive session with >1 GPUs this is okay, it breaks when I submit the job
-    # It appears to be related to inheritance and the base model trainer class
     def on_train_epoch_start(self, trainer, pl_module):
         self.epoch_start = time.time()
 
-    # @rank_zero_only
     def on_train_epoch_end(self, trainer, pl_module):
         curr_time = time.time()
         duration = curr_time - self.epoch_start
@@ -187,7 +181,6 @@ class SkipNanGradCallback(Callback):
         self.iter += 1
         for p in pl_module.parameters():
             if p.grad is not None:
-                # has_grad = True
                 if p.grad.isnan().any():
                     nan_flag = True
         if nan_flag:
@@ -195,9 +188,6 @@ class SkipNanGradCallback(Callback):
             print("Nan grad, skipping update", self.count, self.iter)
             print(pl_module.losses[-5:])
             pl_module.zero_grad()
-            # exit()
-            # if self.count > 10:
-            #     exit()
 
 
 class RandomStateCheckpoint(Callback):

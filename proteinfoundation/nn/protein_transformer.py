@@ -28,88 +28,8 @@ from proteinfoundation.nn.pair_bias_attn.pair_bias_attn import PairBiasAttention
 from proteinfoundation.nn.alphafold3_pytorch_utils.modules import (
     AdaptiveLayerNorm,
     AdaptiveLayerNormOutputScale,
-    SwiGLU,
+    Transition,
 )
-
-
-class SequenceToCoordinates(torch.nn.Module):
-    """Updates coordinates from sequence."""
-
-    def __init__(self, dim_token):
-        super().__init__()
-        self.ln = torch.nn.LayerNorm(dim_token)
-        self.linear = torch.nn.Linear(dim_token, 3)
-
-    def forward(self, seqs, x_t, mask):
-        """
-        Args:
-            seqs: Input sequence representation, shape [b, n, token_dim]
-            x_t: Input coordinates, shape [b, n, 3]
-            mask: binary mask, shape [b, n]
-
-        Returns:
-            Updated (masked) coordinates
-        """
-        delta_x = self.linear(self.ln(seqs))  # [b, n, 3]
-        x_t = x_t + delta_x
-        return x_t * mask[..., None]
-
-
-class CoordinatesToSequenceLinear(torch.nn.Module):
-    """Updates sequence using linear layer from coordiates."""
-
-    def __init__(self, dim_token):
-        super().__init__()
-        self.linear = torch.nn.Linear(3, dim_token, bias=False)
-        self.ln = torch.nn.LayerNorm(dim_token)
-
-    def forward(self, seqs, x_t, mask):
-        """
-        Args:
-            seqs: Input sequence representation, shape [b, n, token_dim]
-            x_t: Input coordinates, shape [b, n, 3]
-            mask: binary mask, shape [b, n]
-
-        Returns:
-            Updated (masked) sequence
-        """
-        delta_seq = self.ln(self.linear(x_t))
-        seqs = seqs + delta_seq
-        return seqs * mask[..., None]
-
-
-class CoordinatesToSequenceIPA(torch.nn.Module):
-    """Updates sequence using IPA from coordiates (and identity rotations)."""
-
-    def __init__(
-        self, dim_token, dim_pair, c_hidden=16, nheads=8, no_qk_points=8, no_v_points=12
-    ):
-        super().__init__()
-        self.ipa = InvariantPointAttention(
-            c_s=dim_token,
-            c_z=dim_pair,
-            c_hidden=c_hidden,
-            no_heads=nheads,
-            no_qk_points=no_qk_points,
-            no_v_points=no_v_points,
-        )
-
-    def forward(self, seqs, pair_rep, x_t, mask):
-        """
-        Args:
-            seqs: Input sequence representation, shape [b, n, token_dim]
-            pair_rep: Pair represnetation, shape [b, n, n, pair_dim]
-            x_t: Input coordinates, shape [b, n, 3]
-            mask: binary mask, shape [b, n]
-
-        Returns:
-            Updated sequence, shape [b, n, dim_token]
-        """
-        x_t = x_t * mask[..., None]
-        r = Rigid(trans=x_t, rots=None)  # Rotations default to identity
-        delta_seqs = self.ipa(s=seqs, z=pair_rep, r=r, mask=mask * 1.0)
-        seqs = seqs + delta_seqs
-        return seqs * mask[..., None]  # [b, n, token_dim]
 
 
 class MultiHeadAttention(torch.nn.Module):
@@ -286,41 +206,6 @@ class MultiHeadBiasedAttentionADALN_MM(torch.nn.Module):
         return x * mask[..., None]
 
 
-# Code from Lucidrain's implementation of AF3
-# https://github.com/lucidrains/alphafold3-pytorch
-class Transition(torch.nn.Module):
-    """Transition layer."""
-
-    def __init__(self, dim, expansion_factor=4, layer_norm=False):
-        super().__init__()
-
-        dim_inner = int(dim * expansion_factor)
-
-        self.use_layer_norm = layer_norm
-        if self.use_layer_norm:
-            self.ln = torch.nn.LayerNorm(dim)
-
-        self.swish_linear = torch.nn.Sequential(
-            torch.nn.Linear(dim, dim_inner * 2, bias=False),
-            SwiGLU(),
-        )
-        self.linear_out = torch.nn.Linear(dim_inner, dim, bias=False)
-
-    def forward(self, x, mask):
-        """
-        Args:
-            x: Input sequence representation, shape [b, n, dim]
-            mask: binary, shape [b, n]
-
-        Returns:
-            Updated sequence representation, shape [b, n, dim]
-        """
-        if self.use_layer_norm:
-            x = self.ln(x)
-        x = self.linear_out(self.swish_linear(x))
-        return x * mask[..., None]
-
-
 class TransitionADALN(torch.nn.Module):
     """Transition layer with adaptive layer norm applied to input and adaptive
     scaling aplied to output."""
@@ -386,7 +271,6 @@ class MultiheadAttnAndTransition(torch.nn.Module):
 
         # If parallel do not allow both layers to have a residual connection since it leads to adding x twice
         if self.parallel and residual_mha and residual_transition:
-            # logger.info("MHA and transition are residual, but with parallel track. Setting transition to non-residual.")
             residual_transition = False
 
         self.residual_mha = residual_mha
@@ -455,7 +339,6 @@ class PairReprUpdate(torch.nn.Module):
         self.layer_norm_in = torch.nn.LayerNorm(token_dim)
         self.linear_x = torch.nn.Linear(token_dim, int(2 * pair_dim), bias=False)
 
-        # self.transition_in = PairTransition(c_z=pair_dim, n=expansion_factor_transition)
         if use_tri_mult:
             tri_mult_c = min(pair_dim, tri_mult_c)
             self.tri_mult_out = TriangleMultiplicationOutgoing(
@@ -494,8 +377,6 @@ class PairReprUpdate(torch.nn.Module):
             pair_rep + x_proj_1[:, None, :, :] + x_proj_2[:, :, None, :]
         )  # [b, n, n, pair_dim]
         pair_rep = self._apply_mask(pair_rep, pair_mask)  # [b, n, n, pair_dim]
-        # pair_rep = pair_rep + checkpoint(self.transition_in, *(pair_rep, pair_mask * 1.0))
-        # pair_rep = self._apply_mask(pair_rep, pair_mask)  # [b, n, n, pair_dim]
         if self.use_tri_mult:
             pair_rep = pair_rep + checkpoint(
                 self.tri_mult_out, *(pair_rep, pair_mask * 1.0)
@@ -581,25 +462,23 @@ class ProteinTransformerAF3(torch.nn.Module):
         self.pair_repr_dim = kwargs["pair_repr_dim"]
         self.update_coors_on_the_fly = kwargs.get(
             "update_coors_on_the_fly", False
-        )  # For backward compat
-        self.update_seq_with_coors = kwargs.get(
-            "update_seq_with_coors", None
-        )  # For backward compat, None, linear or IPA, only used if coors on the fly
+        )
+        self.update_seq_with_coors = None
         self.update_pair_repr = kwargs.get(
             "update_pair_repr", False
-        )  # For backward compat
+        )
         self.update_pair_repr_every_n = kwargs.get(
             "update_pair_repr_every_n", 2
-        )  # For backward compat
-        self.use_tri_mult = kwargs.get("use_tri_mult", False)  # For backward compat
-        self.feats_pair_cond = kwargs.get("feats_pair_cond", [])  # For backward compat
-        self.use_qkln = kwargs.get("use_qkln", False)  # For backward compat
+        )
+        self.use_tri_mult = kwargs.get("use_tri_mult", False)
+        self.feats_pair_cond = kwargs.get("feats_pair_cond", [])
+        self.use_qkln = kwargs.get("use_qkln", False)
         self.num_buckets_predict_pair = kwargs.get(
             "num_buckets_predict_pair", None
-        )  # For backward compat
+        )
 
         # Registers
-        self.num_registers = kwargs.get("num_registers", None)  # For backward compat
+        self.num_registers = kwargs.get("num_registers", None)
         if self.num_registers is None or self.num_registers <= 0:
             self.num_registers = 0
             self.registers = None
@@ -663,23 +542,6 @@ class ProteinTransformerAF3(torch.nn.Module):
                 for _ in range(self.nlayers)
             ]
         )
-
-        # # Coors on the fly
-        # if self.update_coors_on_the_fly:
-        #     self.seq_to_coors = torch.nn.ModuleList([
-        #         SequenceToCoordinates(dim_token=kwargs["token_dim"]) for _ in range(self.nlayers)
-        #     ])
-
-        #     # Coors to seq
-        #     if self.update_seq_with_coors == "linear" or self.update_seq_with_coors == "linearipa":
-        #         self.coors_to_seq_linear = torch.nn.ModuleList([
-        #             CoordinatesToSequenceLinear(dim_token=kwargs["token_dim"]) for _ in range(self.nlayers)
-        #         ])
-
-        #     if self.update_seq_with_coors == "ipa" or self.update_seq_with_coors == "linearipa":
-        #         self.coors_to_seq_ipa = torch.nn.ModuleList([
-        #             CoordinatesToSequenceIPA(dim_token=kwargs["token_dim"], dim_pair=kwargs["pair_repr_dim"]) for _ in range(self.nlayers)
-        #         ])
 
         # To update pair representations if needed
         if self.update_pair_repr:
@@ -778,7 +640,6 @@ class ProteinTransformerAF3(torch.nn.Module):
         r = self.num_registers
         return seqs[:, r:, :], pair[:, r:, r:, :], mask[:, r:]
 
-    # @torch.compile
     def forward(self, batch_nn: Dict[str, torch.Tensor]):
         """
         Runs the network.
@@ -824,17 +685,6 @@ class ProteinTransformerAF3(torch.nn.Module):
                 seqs, pair_rep, c, mask
             )  # [b, n, token_dim]
 
-            # # Coors on the fly
-            # if self.update_coors_on_the_fly:
-            #     coors_3d = self.seq_to_coors[i](seqs, coors_3d, mask)
-
-            #     # Update sequence with coordinates
-            #     if self.update_seq_with_coors == "linear" or self.update_seq_with_coors == "linearipa":
-            #         seqs = self.coors_to_seq_linear[i](seqs, coors_3d, mask)
-
-            #     if self.update_seq_with_coors == "ipa" or self.update_seq_with_coors == "linearipa":
-            #         seqs = self.coors_to_seq_ipa[i](seqs, pair_rep, coors_3d, mask)
-
             if self.update_pair_repr:
                 if i < self.nlayers - 1:
                     if self.pair_update_layers[i] is not None:
@@ -847,8 +697,6 @@ class ProteinTransformerAF3(torch.nn.Module):
 
         # Get final coordinates
         final_coors = self.coors_3d_decoder(seqs) * mask[..., None]  # [b, n, 3]
-        # if self.update_coors_on_the_fly:
-        #     final_coors = final_coors * 0.0 + coors_3d  # Ignore coordinates from final seuqence [b, n, 3]
         nn_out = {}
         if self.update_pair_repr and self.num_buckets_predict_pair is not None:
             pair_pred = self.pair_head_prediction(pair_rep)
@@ -856,60 +704,6 @@ class ProteinTransformerAF3(torch.nn.Module):
                 final_coors + torch.mean(pair_pred) * 0.0
             )  # Does not affect loss but pytorch does not complain for unused params
             final_coors = final_coors * mask[..., None]
-            # If we actually end up using this we'll have to change what the NN returns here... And use it in the loss computation
             nn_out["pair_pred"] = pair_pred
         nn_out["coors_pred"] = final_coors
         return nn_out
-
-    def nflops_computer(self, b, n):
-        """Approximately how many flops used, for the main transformer layers. Protein length n.
-
-        Final equation per layer per sample:
-            12 * n * dim^2 + (dim + 1) * n^2 + 4 * n * 4 + [pair_dim * n^2]
-
-        where the term in brackets [...] is used only with pair biased attn.
-
-        The final number is obtained by multiplying by batch size and number of layers.
-
-        Decomposing the number:
-            - MHA:
-                - Computing QKV with linear layers: 3n * dim^2
-                - Computing attn logits: dim * n^2
-                - Softmax: n^2
-                - Attention: dim * n^2
-
-            - Transition (feed forward, single hidden layer with expansion factor 4)
-                - 1st linear layer: 4n * dim^2
-                - activations: 4n * dim
-                - 2nd linear layer: 4n * dim^2
-
-            - Pair bias
-                - (dim + 1) * n^2
-        """
-        # MHA
-        # QKV
-        nflops = 3 * n * self.token_dim**2
-        # Attn logits
-        nflops = nflops + self.token_dim * n**2
-        # softmax
-        nflops = nflops + n**2
-        # attn
-        nflops = nflops + self.token_dim * n**2
-        # Some linear layer I might be missing
-
-        # FF in transition, assumes ff has expansion_factor=4
-        # Linear
-        nflops = nflops + n * self.token_dim * 4 * self.token_dim
-        # activation
-        nflops = nflops + n * 4 * self.token_dim
-        # Linear
-        nflops = nflops + n * self.token_dim * 4 * self.token_dim
-
-        # Pair bias
-        if self.use_attn_pair_bias:
-            # Computing and adding bias to attn logits
-            nflops = nflops + (self.pair_repr_dim + 1) * n**2
-
-        # Ignoring updating pair representation when used
-
-        return b * nflops * self.nlayers  # Adjust for batch size and layers

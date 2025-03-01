@@ -37,8 +37,7 @@ def sample_uniform_rotation(
     shape=tuple(), dtype=None, device=None
 ) -> Float[Tensor, "*batch 3 3"]:
     """
-    Samples rotations distributed uniformly. Adapted from FrameFlow's code.
-    https://github.com/microsoft/protein-frame-flow/blob/main/data/so3_utils.py
+    Samples rotations distributed uniformly.
 
     Args:
         shape: tuple (if empty then samples single rotation)
@@ -100,11 +99,10 @@ class Proteina(ModelTrainerBase):
         Returns:
             Tuple (x_1, mask, batch_shape, n, dtype)
         """
-        # x_1 = batch["translations_gt"].to(dtype=torch.float32)  # [b, n, 3]
         x_1 = batch["coords"][:,:,1,:]  # [b, n, 3]
         mask = batch["mask_dict"]["coords"][..., 0, 0]  # [b, n] boolean
         if self.cfg_exp.model.augmentation.global_rotation:
-            # CAREFUL: If naug_rot is > 1 this increases batch size
+            # CAREFUL: If naug_rot is > 1 this increases "batch size"
             x_1, mask = self.apply_random_rotation(
                 x_1, mask, naug=self.cfg_exp.model.augmentation.naug_rot
             )
@@ -117,7 +115,6 @@ class Proteina(ModelTrainerBase):
             n,
             x_1.dtype,
         )  # Since we work in nm throughout
-        # If we do this for FF as well we might pull the and_to_nm out
 
     def apply_random_rotation(self, x, mask, naug=1):
         """
@@ -158,7 +155,7 @@ class Proteina(ModelTrainerBase):
         t = t.clamp(min=eps, max=1.0 - eps)  # For safety
         return t / (
             1.0 - t
-        )  # This weight gives flow matching's original weighting (for the interpolation defined in the euclidean fm)
+        )
 
     def compute_fm_loss(
         self,
@@ -183,14 +180,10 @@ class Proteina(ModelTrainerBase):
             Flow matching loss.
         """
         nres = torch.sum(mask, dim=-1) * 3  # [*]
-        _, lambda_prime_t = self.fm.log_snr(t)  # [*]
-        w_t = self.compute_loss_weight(t)  # [*]
 
         err = (x_1 - x_1_pred) * mask[..., None]  # [*, n, 3]
         loss = torch.sum(err**2, dim=(-1, -2)) / nres  # [*]
 
-        # total_loss_w = w_t * lambda_prime_t
-        # total_loss_w = total_loss_w.clamp(0, 100.0)
         total_loss_w = 1.0 / ((1.0 - t) ** 2 + 1e-5)
 
         loss = loss * total_loss_w  # [*]
@@ -220,8 +213,7 @@ class Proteina(ModelTrainerBase):
         batch: Dict[str, Tensor] = None,
     ) -> Float[Tensor, ""]:
         """
-        Computes and logs auxiliary losses, inspired by the FrameFlow paper
-        https://arxiv.org/pdf/2310.05297
+        Computes and logs auxiliary losses.
 
         Args:
             x_1: True clean sample, shape [*, n, 3].

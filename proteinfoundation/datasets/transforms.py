@@ -11,7 +11,6 @@
 import gzip
 import os
 import pickle
-import random
 import re
 from collections import defaultdict
 from math import prod
@@ -26,10 +25,6 @@ from scipy.spatial.transform import Rotation as Scipy_Rotation
 from torch_geometric import transforms as T
 from torch_geometric.data import Data
 
-from openfold.data.data_transforms import atom37_to_frames
-from openfold.np import residue_constants as rc
-from openfold.utils.rigid_utils import Rigid
-from proteinfoundation.utils.align_utils.align_utils import mean_w_mask
 
 
 def sample_uniform_rotation(shape=(), dtype=None, device=None) -> torch.Tensor:

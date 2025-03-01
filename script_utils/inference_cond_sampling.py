@@ -14,27 +14,20 @@ from typing import List
 
 root = os.path.abspath(".")
 sys.path.append(root)  # Adds project's root directory
-# isort: split
 
 import argparse
-import json
 from collections import defaultdict
 import random
 
-# from PIL import Image
-# from PIL import ImageDraw
-# from PIL import ImageFont
-
 import hydra
 import lightning as L
-import pandas as pd
 import torch
 from dotenv import load_dotenv
 from loguru import logger
 from torch.utils.data import DataLoader, Dataset
 
 from proteinfoundation.proteinflow.proteina import Proteina
-from proteinfoundation.utils.pdb_utils.pdb_utils import write_prot_to_pdb
+from proteinfoundation.utils.ff_utils.pdb_utils import write_prot_to_pdb
 
 
 # Another version of the generator dataset, which is a bit more flexible than the one in inference.py

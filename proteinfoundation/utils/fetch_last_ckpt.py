@@ -54,5 +54,5 @@ def fetch_last_ckpt(ckpt_dir: str) -> Union[str, None]:
         return None
     sorted_files = sorted(
         last_ckpts, key=get_version_number, reverse=True
-    )  # fort by version #, highest first
+    )  # sort by version #, highest first
     return sorted_files[0]

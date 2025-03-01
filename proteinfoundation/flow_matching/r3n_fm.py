@@ -225,14 +225,12 @@ class R3NFlowMatcher:
             Updated x_t after Euler integration step, shape [*, n, 3]
             Updated time [*]
         """
-        # x_t = self._mask_and_zero_com(x_t, mask)  # Not needed here
         v = self._apply_mask(v, mask)
         n = x_t.shape[-2]
 
         # Euler step
         t_ext = self._extend_t(n, t)  # [*, n]
 
-        # x_t_updated, _ = self.euclidean_fm.step_euler(
         x_t_updated, _ = self.step_euler(
             x_t=x_t,
             v=v,
@@ -325,7 +323,7 @@ class R3NFlowMatcher:
 
         if (
             sampling_mode == "vf" or t_element > 1.0
-        ):  # This will likely become a parameter
+        ):
             return x_t + v * dt, t + dt
 
         if sampling_mode == "sc":
@@ -360,7 +358,6 @@ class R3NFlowMatcher:
             Score of intermediate density, shape [*, dim].
         """
         assert torch.all(t < 1.0), "vf_to_score requires t < 1 (strict)"
-        # Actually, this formula works for t=0
         num = t[..., None] * v - x_t  # [*, n, 3]
         den = (1.0 - t)[..., None] * self.scale_ref**2  # [*, n, 1]
         score = num / den
@@ -498,7 +495,6 @@ class R3NFlowMatcher:
                 dt = ts[step + 1] - ts[step]  # float
                 gt_step = gt[step]  # float
 
-                # print(t[0].item(), (t[0] + dt).item(), dt.item())
 
                 if fixed_structure_mask is None:
                     nn_in = {
@@ -541,7 +537,6 @@ class R3NFlowMatcher:
                     sc_scale_score=sc_scale_score,
                     mask=mask,
                 )
-            print("x produced shape", x.shape)
             return x
 
     def get_gt(

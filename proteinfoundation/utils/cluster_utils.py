@@ -79,9 +79,6 @@ class ClusterSampler(Sampler):
         if torch.distributed.is_initialized():
             self.num_replicas = torch.distributed.get_world_size()
             self.rank = torch.distributed.get_rank()
-            # logger.info(
-            #     f"Distributed sampler is initialized with rank {self.rank} and world size {self.num_replicas}."
-            # )
         else:
             self.num_replicas = None
             self.rank = 0

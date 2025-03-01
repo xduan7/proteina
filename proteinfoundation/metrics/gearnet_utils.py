@@ -401,10 +401,6 @@ class GearNet(nn.Module):
         residue_id = residue_id[:, None].expand_as(atom_mask)  # (num_residue, 37)
         atom_seq_pos = residue_id[atom_mask]  # (num_atom, )
 
-        # Comment this as sometimes there is no node_id in the batch
-        # atom_seq_pos = batch.node_id.expand_as(atom_mask)
-        # atom_seq_pos = atom_seq_pos[atom_mask]
-
         return atom_type, atom_type, coords, atom_seq_pos, atom2batch
 
     def forward(self, batch: Batch):

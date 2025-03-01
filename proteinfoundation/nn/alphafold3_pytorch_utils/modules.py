@@ -85,3 +85,38 @@ class SwiGLU(torch.nn.Module):
         """
         x, gates = x.chunk(2, dim=-1)
         return F.silu(gates) * x
+
+
+# Code adapted from Lucidrain's implementation of AF3
+# https://github.com/lucidrains/alphafold3-pytorch
+class Transition(torch.nn.Module):
+    """Transition layer."""
+
+    def __init__(self, dim, expansion_factor=4, layer_norm=False):
+        super().__init__()
+
+        dim_inner = int(dim * expansion_factor)
+
+        self.use_layer_norm = layer_norm
+        if self.use_layer_norm:
+            self.ln = torch.nn.LayerNorm(dim)
+
+        self.swish_linear = torch.nn.Sequential(
+            torch.nn.Linear(dim, dim_inner * 2, bias=False),
+            SwiGLU(),
+        )
+        self.linear_out = torch.nn.Linear(dim_inner, dim, bias=False)
+
+    def forward(self, x, mask):
+        """
+        Args:
+            x: Input sequence representation, shape [b, n, dim]
+            mask: binary, shape [b, n]
+
+        Returns:
+            Updated sequence representation, shape [b, n, dim]
+        """
+        if self.use_layer_norm:
+            x = self.ln(x)
+        x = self.linear_out(self.swish_linear(x))
+        return x * mask[..., None]

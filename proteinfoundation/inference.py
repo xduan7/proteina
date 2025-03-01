@@ -14,7 +14,6 @@ from typing import List
 
 root = os.path.abspath(".")
 sys.path.append(root)  # Adds project's root directory
-# isort: split
 
 import argparse
 import random
@@ -39,7 +38,7 @@ from proteinfoundation.metrics.metric_factory import (
     generation_metric_from_list,
 )
 from proteinfoundation.proteinflow.proteina import Proteina
-from proteinfoundation.utils.pdb_utils.pdb_utils import mask_cath_code_by_level, write_prot_to_pdb
+from proteinfoundation.utils.ff_utils.pdb_utils import mask_cath_code_by_level, write_prot_to_pdb
 
 
 # Length dataloader for validation and inference

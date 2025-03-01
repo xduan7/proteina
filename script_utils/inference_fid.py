@@ -13,7 +13,6 @@ import sys
 
 root = os.path.abspath(".")
 sys.path.append(root)  # Adds project's root directory
-# isort: split
 
 import os
 import hydra

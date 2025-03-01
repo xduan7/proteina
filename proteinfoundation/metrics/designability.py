@@ -24,7 +24,7 @@ from transformers.models.esm.openfold_utils.protein import Protein as OFProtein
 from transformers.models.esm.openfold_utils.protein import to_pdb
 
 from proteinfoundation.utils.align_utils.align_utils import kabsch_align_ind
-from proteinfoundation.utils.pdb_utils.pdb_utils import from_pdb_string
+from proteinfoundation.utils.ff_utils.pdb_utils import from_pdb_string
 
 hf_logging.set_verbosity_error()
 
@@ -111,9 +111,6 @@ def run_proteinmpnn(
         command += f" > /dev/null 2>&1"
 
     os.system(command)
-
-    # TODO(tgeffner): Possibly delete produced files?
-
     return extract_gen_seqs(os.path.join(out_dir_root, "seqs", name + ".fa"))
 
 
@@ -167,10 +164,6 @@ def run_and_store_esm(
 
     Returns:
         List of paths (list of str) to PDB files
-
-    TODO(tgeffner): Should probably handle full batch or each individual
-    sequence (or somewhere in the middle) automtically depending on number
-    of sequences and lengths.
     """
     is_cluster_run = os.environ.get("SLURM_JOB_ID") is not None
     cache_dir = None
@@ -258,9 +251,9 @@ def rmsd_metric(
         coors_2_atom37: Second structure, shape [n, 37, 3]
         mask_1_atom37: Binary mask of first structure, shape [n, 37]
         mask_2_atom37: Binary mask of first structure, shape [n, 37]
-        mode: Modality to use, options are "ca" or "bb", referring to only alpha
-            carbon or 3 bacbone atoms.
-        incl_ox: Wehther to include oxygen atom
+        mode: Modality to use, for now single option "ca", referring to only alpha
+            carbon.
+        incl_ox: Wehther to include oxygen atom, should be left to False
         align: Whether to align pointclouds before computing RMSD.
 
     Returns:
@@ -273,22 +266,6 @@ def rmsd_metric(
         assert mask_1_atom_37.shape == coors_1_atom37.shape[1:]
     if mask_2_atom_37 is not None:
         assert mask_2_atom_37.shape == coors_2_atom37.shape[1:]
-
-    # Which atoms to select, recall Atom37 order [N, CA, C, CB, O, ...]
-    # if mode == "ca":
-    #     idx_select = [1]  # [CA]
-    # elif mode == "bb":
-    #     idx_select = [0, 1, 2]  # [N CA C]
-    # else:
-    #     raise IOError(f"Mode {mode} for RMSD not valid")
-
-    # if incl_ox:
-    #     idx_select += [4]  # += [O]
-
-    # For now only support CA alone, if want to move to full backbone then we'd need
-    # to be careful, as caflow would not allow that. This could be done by adding an
-    # argument indicating atoms produced by the model / model type, and restricting the
-    # comparison to those atoms, over-writing other config.
     idx_select = [1]  # [CA]
 
     coors_1 = coors_1_atom37[:, idx_select, :]  # [n, natoms_sel, 3]
@@ -331,10 +308,6 @@ def scRMSD(
     Returns:
         Either best RMSD (scRMSD) or a list of all values for all generations, depending on
         the ret_min argument.
-
-    TODO(tgeffner): Look into pmpnn with all atoms / full backbone. Right now
-    however you get the sequences this allows the computation of both
-    CA and backbone RMSD.
     """
     name = pdb_name_from_path(pdb_file_path)
 
@@ -361,8 +334,6 @@ def scRMSD(
         rec_prot_esm = load_pdb(out_esm)
         gen_coors = torch.Tensor(gen_prot.atom_positions)
         rec_coors = torch.Tensor(rec_prot_esm.atom_positions)
-        # gen_mask = gen_prot.atom_mask
-        # rec_mask = rec_prot_esm.atom_mask
 
         results.append(rmsd_metric(gen_coors, rec_coors))  # rmsd_ca
 

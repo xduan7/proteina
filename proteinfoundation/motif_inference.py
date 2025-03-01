@@ -15,7 +15,6 @@ from typing import Dict, List, Optional
 
 root = os.path.abspath(".")
 sys.path.append(root)  # Adds project's root directory
-# isort: split
 
 import argparse
 import random
@@ -33,7 +32,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from proteinfoundation.metrics.designability import scRMSD
 from proteinfoundation.proteinflow.proteina import Proteina
-from proteinfoundation.utils.pdb_utils.pdb_utils import write_prot_to_pdb
+from proteinfoundation.utils.ff_utils.pdb_utils import write_prot_to_pdb
 from proteinfoundation.nn.motif_factory import parse_motif, save_motif_csv
 
 
@@ -208,7 +207,7 @@ class GenMotifDataset(Dataset):
 
         if self.motif_masks and index < len(self.motif_masks) and self.motif_masks[index] is not None:
             result["motif_seq_mask"] = self.motif_masks[index]
-            result["motif_structure"] = self.motif_structures[index] / 10 #TODO: use angstrom to NM
+            result["motif_structure"] = self.motif_structures[index] / 10
             result["mask"] = self.general_masks[index].bool()
         return result
 
@@ -310,7 +309,6 @@ if __name__ == "__main__":
     ckpt_file = os.path.join(ckpt_path, cfg.ckpt_name)
     logger.info(f"Using checkpoint {ckpt_file}")
     assert os.path.exists(ckpt_file), f"Not a valid checkpoint {ckpt_file}"
-    # ckpt = torch.load(ckpt_file)
     model = Proteina.load_from_checkpoint(ckpt_file)
 
     # Set seed

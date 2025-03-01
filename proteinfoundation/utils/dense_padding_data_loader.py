@@ -8,7 +8,6 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-# https://github.com/pyg-team/pytorch_geometric/pull/8518
 from collections import defaultdict
 from collections.abc import Mapping
 from typing import Any, List, Optional, Sequence, Tuple, Union
@@ -143,13 +142,6 @@ def _dense_padded_collate(
             raise NotImplementedError(
                 "Dense padding collation for nested tensors is not supported (tested) yet."
             )
-            tensors = []
-            for nested_tensor in values:
-                tensors.extend(nested_tensor.unbind())
-            value = torch.nested.nested_tensor(tensors)
-            mask = torch.nested.map(lambda tensor: (tensor != padding_value), value)
-
-            return value, mask
 
         out = None
         if torch.utils.data.get_worker_info() is not None:
@@ -177,25 +169,12 @@ def _dense_padded_collate(
         raise NotImplementedError(
             "Dense padding collation for TensorFrames is not supported (tested) yet."
         )
-        values, mask = _dense_pad_tensor(
-            key, values, non_float_padding_value=non_float_padding_value
-        )
-        value = torch_frame.cat(values, along="row")
-        return value, mask
 
     elif is_sparse(elem):
         # Concatenate a list of `SparseTensor` along the `cat_dim`.
         raise NotImplementedError(
             "Dense padding collation for SparseTensors is not supported (tested) yet."
         )
-        values, mask = _dense_pad_tensor(
-            key, values, non_float_padding_value=non_float_padding_value
-        )
-        if is_torch_sparse_tensor(elem):
-            value = cat(values, dim=cat_dim)
-        else:
-            value = torch_sparse.cat(values, dim=cat_dim)
-        return value, mask
 
     elif isinstance(elem, (int, float)):
         # Convert a list of numerical values to a `torch.Tensor`.

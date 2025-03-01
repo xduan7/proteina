@@ -20,8 +20,6 @@ def trans_nm_to_atom37(ca_coors_nm):
     """
     Converts CA positions (in nm) into atom37 representation (in Å).
 
-    We rely on openfold's functionality.
-
     Args:
         ca_coors: CA coordinates in nm, shape [*, N, 3]
 
@@ -34,8 +32,6 @@ def trans_nm_to_atom37(ca_coors_nm):
 def trans_ang_to_atom37(ca_coors):
     """
     Converts CA positions (in Å) into atom37 representation.
-
-    We rely on openfold's functionality.
 
     Args:
         ca_coors: CA coordinates in Å, shape [*, N, 3]

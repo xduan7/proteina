@@ -154,7 +154,7 @@ def save_motif_csv(pdb_path, motif_task_name, contigs, outpath = None, segment_o
             'pdb_name': pdb_name, 
             'sample_num': index, 
             'contig': value,
-            'redesign_positions': ' ', #';'.join([x for x in value.split('/') if 'A' in x or 'B' in x or 'C' in x or 'D' in x]),
+            'redesign_positions': ' ',
             'segment_order': segment_order
         } 
         for index, value in enumerate(contigs)
@@ -216,14 +216,9 @@ def generate_indices_and_mask(contig: str, min_length: int, max_length: int) -> 
             else:
                 # Scaffold part
                 if '-' in part:
-                    # # assert part.split('-')[0] == part.split('-')[-1]
-                    # print(part)
-                    # # length = int(part.split('-')[0])
-                    
                     bounds = part.split('-')
                     assert int(bounds[0]) <= int(bounds[-1])
                     length = random.randint(int(bounds[0]), int(bounds[-1]))
-                    #raise ValueError(f'There is "-" in scaffold {part}, which supposed to be determined already! Please check again.')
                 else:
                     length = int(part)
                 motif_mask.extend([False] * length)
@@ -411,8 +406,6 @@ class SingleMotifFactory:
         Returns:
             dict: Updated features with motif information.
         """
-        # Check if input is monomer
-        # assert batch['num_chains'] == 1, 'Input must be monomer'
         result = {}
         if random.random() > self.motif_prob:
             motif_sequence_mask = torch.zeros((num_residues))

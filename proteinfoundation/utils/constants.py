@@ -12,7 +12,7 @@ import torch
 from typing import Dict
 from openfold.np.residue_constants import atom_types
 
-# Extracted from graphein https://github.com/a-r-j/graphein/tree/master
+
 ATOM_NUMBERING: Dict[str, int] = {
     atom: i
     for i, atom in enumerate(

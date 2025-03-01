@@ -11,7 +11,7 @@
 
 import torch
 
-from proteinfoundation.utils.pdb_utils.pdb_utils import from_pdb_file
+from proteinfoundation.utils.ff_utils.pdb_utils import from_pdb_file
 
 
 def transform_global_percentage_to_mask_dropout(fold_label_sample_ratio):
