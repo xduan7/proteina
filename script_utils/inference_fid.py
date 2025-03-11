@@ -45,13 +45,13 @@ if __name__ == "__main__":
     feat_name = "%seval_ca_features.pth" if args.ca_only else "%seval_features.pth"
     feat_path = os.path.join(data_path, "metric_factory", "features", feat_name)
 
-    ref_db = ["pdb_", "afdb_", "pdb_cath_"]
+    ref_db = ["pdb_", "afdb_"]
     results = {}
     for db in ref_db:
         metric_factory = GenerationMetricFactory(
             ckpt_path=ckpt_path, 
             ca_only=args.ca_only, 
-            metrics=["FID", "fJSD_C", "fJSD_A", "fJSD_T"], 
+            metrics=["FPSD", "fJSD_C", "fJSD_A", "fJSD_T"], 
             real_features_path=feat_path % db,
             reset_real_features=False,
             prefix=db.upper(),
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     metric_factory = GenerationMetricFactory(
         ckpt_path=ckpt_path, 
         ca_only=args.ca_only, 
-        metrics=["IS_C", "IS_A", "IS_T"], 
+        metrics=["fS_C", "fS_A", "fS_T"], 
         real_features_path=None,
         reset_real_features=False,
     )
