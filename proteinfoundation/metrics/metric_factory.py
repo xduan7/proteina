@@ -22,7 +22,7 @@ from torch_geometric.loader import DataLoader
 from torchmetrics.metric import Metric
 from tqdm import tqdm
 
-from proteinfoundation.metrics.fpsd import ProteinFrechetProteinStructureDistance
+from proteinfoundation.metrics.fid import ProteinFrechetInceptionDistance
 from proteinfoundation.metrics.fJSD import FoldJensenShannonDivergence
 from proteinfoundation.metrics.gearnet_utils import NoTrainBBGearNet, NoTrainCAGearNet
 from proteinfoundation.metrics.fold_score import ProteinFoldScore
@@ -50,7 +50,7 @@ class GenerationMetricFactory(ModuleList):
         Initialize the GeneationMetric Factory with specified structure encoder nd metrics.
 
         Args:
-            metrics (List[str]): List of metric names to be included. Metric names should be in ["FPSD", "fS_C", "fS_A", "fS_T", "fJSD_C", "fJSD_A", "fJSD_T"]
+            metrics (List[str]): List of metric names to be included. Metric names should be in ["FID", "fS_C", "fS_A", "fS_T", "fJSD_C", "fJSD_A", "fJSD_T"]
             ckpt_path (str): Path to the checkpoint of the structure encoder.
             ca_only (Optional[bool]): Whether to use CA-only structure model or Backbone structure model.
                 Defaults to False.
@@ -78,8 +78,8 @@ class GenerationMetricFactory(ModuleList):
         self.metrics = metrics
         self.metric_modules = ModuleList()
         for metric in metrics:
-            if metric == "FPSD":
-                _metric = ProteinFrechetProteinStructureDistance(
+            if metric == "FID":
+                _metric = ProteinFrechetInceptionDistance(
                     num_features, reset_real_features=reset_real_features
                 )
             elif metric in ["fS_C", "fS_A", "fS_T"]:
@@ -116,7 +116,7 @@ class GenerationMetricFactory(ModuleList):
         """
         real_features = torch.load(real_features_path)
         for metric, metric_module in zip(self.metrics, self.metric_modules):
-            if metric in ["FPSD", "fJSD_C", "fJSD_A", "fJSD_T"]:
+            if metric in ["FID", "fJSD_C", "fJSD_A", "fJSD_T"]:
                 features_dict = {}
                 for k, v in real_features.items():
                     if k.startswith(metric + "_"):
@@ -137,7 +137,7 @@ class GenerationMetricFactory(ModuleList):
             ), f"Only support dumping real dataset features with 1 process, but got {total_processes}"
         real_features = {}
         for metric, metric_module in zip(self.metrics, self.metric_modules):
-            if metric in ["FPSD", "fJSD_C", "fJSD_A", "fJSD_T"]:
+            if metric in ["FID", "fJSD_C", "fJSD_A", "fJSD_T"]:
                 features_dict = metric_module.dump_real_features()
                 for k, v in features_dict.items():
                     real_features[metric + "_" + k] = v.cpu()
@@ -154,7 +154,7 @@ class GenerationMetricFactory(ModuleList):
         with torch.no_grad():
             output = self.structure_encoder(proteins)
         for metric, metric_module in zip(self.metrics, self.metric_modules):
-            if metric == "FPSD":
+            if metric == "FID":
                 metric_module.update(output["protein_feature"], real=real)
             elif metric in ["fS_C", "fS_A", "fS_T"] and not real:
                 level = metric[-1]
@@ -278,7 +278,7 @@ if __name__ == "__main__":
     size = 1000
 
     metric_factory = GenerationMetricFactory(
-        metrics=["FPSD", "fS_C", "fS_A", "fS_T", "fJSD_C", "fJSD_A", "fJSD_T"],
+        metrics=["FID", "fS_C", "fS_A", "fS_T", "fJSD_C", "fJSD_A", "fJSD_T"],
         ckpt_path="./model_weights/gearnet_ca.pth",
         ca_only=True,
         reset_real_features=False,

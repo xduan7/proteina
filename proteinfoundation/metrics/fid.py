@@ -39,7 +39,7 @@ def _compute_fid(mu1: Tensor, sigma1: Tensor, mu2: Tensor, sigma2: Tensor) -> Te
     return a + b - 2 * c
 
 
-class ProteinFrechetProteinStructureDistance(Metric):
+class ProteinFrechetInceptionDistance(Metric):
 
     higher_is_better: bool = False
     is_differentiable: bool = False
@@ -61,11 +61,11 @@ class ProteinFrechetProteinStructureDistance(Metric):
         **kwargs: Any,
     ) -> None:
         """
-        Calculate Fréchet Protein Structure Distance (FPSD) which is used to access the similarity between two protein structure distribution.
+        Calculate Protein Fréchet inception distance (FID) which is used to access the similarity between two protein structure distribution.
 
         Args:
             num_features (int): Feature dimensions.
-            reset_real_features (Optional[bool]): Whether to reset features of the real dataset for FPSD and fJSD metrics.
+            reset_real_features (Optional[bool]): Whether to reset features of the real dataset for FID and fJSD metrics.
                 Defaults to False.
 
         """
@@ -142,10 +142,10 @@ class ProteinFrechetProteinStructureDistance(Metric):
             self.fake_features_num_samples += batch_size
 
     def compute(self) -> Tensor:
-        """Calculate FPSD score based on accumulated extracted features from the two distributions."""
+        """Calculate FID score based on accumulated extracted features from the two distributions."""
         if self.real_features_num_samples < 2 or self.fake_features_num_samples < 2:
             raise RuntimeError(
-                "More than one sample is required for both the real and fake distributed to compute FPSD"
+                "More than one sample is required for both the real and fake distributed to compute FID"
             )
         mean_real = (self.real_features_sum / self.real_features_num_samples).unsqueeze(
             0
@@ -188,7 +188,7 @@ if __name__ == "__main__":
     total_sample = 65536
     num_experiment = 10
 
-    metric = ProteinFrechetProteinStructureDistance(num_features, reset_real_features=False)
+    metric = ProteinFrechetInceptionDistance(num_features, reset_real_features=False)
 
     # Real dataset N(0, 9)
     real_dataset = torch.randn((total_sample, num_features)) * 3

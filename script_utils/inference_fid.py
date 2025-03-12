@@ -51,7 +51,7 @@ if __name__ == "__main__":
         metric_factory = GenerationMetricFactory(
             ckpt_path=ckpt_path, 
             ca_only=args.ca_only, 
-            metrics=["FPSD", "fJSD_C", "fJSD_A", "fJSD_T"], 
+            metrics=["FID", "fJSD_C", "fJSD_A", "fJSD_T"], 
             real_features_path=feat_path % db,
             reset_real_features=False,
             prefix=db.upper(),
