@@ -45,7 +45,7 @@ if __name__ == "__main__":
     feat_name = "%seval_ca_features.pth" if args.ca_only else "%seval_features.pth"
     feat_path = os.path.join(data_path, "metric_factory", "features", feat_name)
 
-    ref_db = ["pdb_", "afdb_"]
+    ref_db = ["pdb_", "D_FS_"]
     results = {}
     for db in ref_db:
         metric_factory = GenerationMetricFactory(
