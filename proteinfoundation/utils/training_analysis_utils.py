@@ -36,6 +36,9 @@ class CheckGradientsCallback(Callback):
 
 class LogEpochTimeCallback(Callback):
     """Simple callback that logs how long each epoch takes, in seconds, to a pytorch lightning log"""
+    def __init__(self):
+        super().__init__()
+        self.epoch_start = time.time()
 
     def on_train_epoch_start(self, trainer, pl_module):
         self.epoch_start = time.time()
@@ -58,8 +61,11 @@ class LogEpochTimeCallback(Callback):
             )
 
 
-class LogSetpTimeCallback(Callback):
+class LogStepTimeCallback(Callback):
     """Simple callback that logs how long each training step takes, in seconds, to a pytorch lightning log"""
+    def __init__(self):
+        super().__init__()
+        self.step_start = time.time()
 
     def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
         self.step_start = time.time()

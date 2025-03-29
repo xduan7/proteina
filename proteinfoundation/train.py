@@ -41,7 +41,7 @@ from proteinfoundation.utils.seed_callback import SeedCallback
 from proteinfoundation.utils.training_analysis_utils import (
     GradAndWeightAnalysisCallback,
     LogEpochTimeCallback,
-    LogSetpTimeCallback,
+    LogStepTimeCallback,
     SkipNanGradCallback,
 )
 
@@ -189,7 +189,8 @@ if __name__ == "__main__":
         config_path = "../configs/datasets_config/"
     with hydra.initialize(config_path, version_base=hydra.__version__):
         cfg_data = hydra.compose(config_name=cfg_exp["dataset"])
-        cfg_data.datamodule.num_workers = num_cpus  # Overwrite number of cpus
+        # cfg_data.datamodule.num_workers = num_cpus  # Overwrite number of cpus
+        cfg_data.datamodule.num_workers = 0
         if cfg_data.get("exclude_id_pkl_path") is not None:
             with open(cfg_data.exclude_id_pkl_path, "rb") as fin:
                 exclude_ids = pickle.load(fin)
@@ -207,7 +208,7 @@ if __name__ == "__main__":
     if cfg_exp.log.log_wandb and not args.nolog:
         wandb_logger = WandbLogger(project=cfg_exp.log.wandb_project, id=run_name)
         callbacks.append(LogEpochTimeCallback())
-        callbacks.append(LogSetpTimeCallback())
+        callbacks.append(LogStepTimeCallback())
 
     log_info(f"Using EMA with decay {cfg_exp.ema.decay}")
     callbacks.append(EMA(**cfg_exp.ema))
