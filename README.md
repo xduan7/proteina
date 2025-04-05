@@ -39,7 +39,7 @@ For environment setup [mamba](https://mamba.readthedocs.io/en/latest/user_guide/
 
 ```
 mamba env create -f environment.yaml
-conda activate proteinfoundation
+conda activate proteina_env
 pip install -e .
 ```
 
