@@ -440,7 +440,7 @@ class ProteinTransformerAF3(torch.nn.Module):
 
     (1) Input preparation
     (1.a) Initial sequence representation from features
-    (1.b) Embed coordaintes and add to initial sequence representation
+    (1.b) Embed coordinates and add to initial sequence representation
     (1.c) Conditioning variables from features
 
     (2) Main trunk
