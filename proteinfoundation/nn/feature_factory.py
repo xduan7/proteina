@@ -15,11 +15,13 @@ import os
 import random
 from typing import Dict, List, Literal
 
+import esm
 import torch
 from loguru import logger
 from torch.nn import functional as F
 from torch_scatter import scatter_mean
 
+from graphein_utils.graphein_utils import RESI_THREE_TO_1
 from proteinfoundation.utils.ff_utils.pdb_utils import extract_cath_code_by_level
 from proteinfoundation.utils.ff_utils.idx_emb_utils import get_index_embedding, get_time_embedding
 
@@ -81,6 +83,43 @@ def indices_force_start_w_one(pdb_idx, mask):
     pdb_idx = pdb_idx - first_val + 1
     pdb_idx = torch.masked_fill(pdb_idx, ~mask, -1)  # set masked elements to -1
     return pdb_idx
+
+
+ESM_MODEL = None
+ESM_BATCH_CONVERTER = None
+
+def load_esm_model_and_batch_converter(esm_model_name, device, **kwargs):
+    """
+    Loads the ESM model and batch converter and caches them in global variables `ESM_MODEL` and `ESM_CONVERTER`.
+
+    Args:
+        esm_model_name (str): Name of the ESM model to load.
+        device (str or torch.device): Device to load the model on (e.g., "cuda:0" or "cpu").
+        **kwargs: Additional keyword arguments to pass to the model loading function.
+
+    """
+    global ESM_MODEL, ESM_BATCH_CONVERTER
+
+    requires_reload = (ESM_MODEL is None) \
+        or (ESM_BATCH_CONVERTER is None) \
+        or (esm_model_name != ESM_MODEL.__class__.__name__) \
+        or ESM_MODEL.device != device
+
+    if requires_reload:
+
+        model_func = getattr(esm.pretrained, esm_model_name, None)
+
+        esm_model, alphabet = model_func(**kwargs)
+        esm_model = esm_model.to(device)
+        esm_model.requires_grad_(False)
+        esm_model.eval()
+
+        ESM_MODEL = esm_model
+        ESM_BATCH_CONVERTER = alphabet.get_batch_converter()
+
+        logger.info(f"ESM model {esm_model_name} loaded on {device}")
+
+    return ESM_MODEL, ESM_BATCH_CONVERTER
 
 
 ################################
@@ -550,6 +589,126 @@ class XscPairwiseDistancesPairFeat(Feature):
             return torch.zeros(b, n, n, self.dim, device=x.device)
 
 
+class ESMFeat(Feature):
+    """ESM feature class.
+
+    Args:
+        esm_model_name (str): Name of the ESM model to load.
+        esm_repr_layers (tuple): Tuple of integers specifying the layers to
+            use for the embeddings. Default is None, which uses all layers.
+        device (str or torch.device): Device to use.
+
+    """
+
+    def __init__(
+        self,
+        esm_model_name,
+        esm_repr_layers,
+        feat_type,
+        device,
+        **kwargs,
+    ):
+        device = torch.device(device)
+        model, batch_converter = load_esm_model_and_batch_converter(
+            esm_model_name=esm_model_name,
+            device=device,
+        )
+        if esm_repr_layers is None:
+            # For sequence features, the first layer is actually the
+            # scaled input, so the total number of layers is num_layers + 1
+            esm_repr_layers = tuple(range(model.num_layers + 1))
+        if feat_type == "seq":
+            feat_dim = model.embed_dim * len(esm_repr_layers)
+        elif feat_type == "pair":
+            feat_dim = model.attention_heads * model.num_layers
+        else:
+            raise ValueError(f"Unknown ESM feature type {feat_type}. Use 'seq' or 'pair'.")
+
+        super().__init__(dim=feat_dim)
+        self.model = model
+        self.batch_converter = batch_converter
+        self.repr_layers = esm_repr_layers
+        self.device = device
+
+    def get_tokens(self, batch, device):
+        """Returns the tokens for the given batch."""
+        sequences = [
+            "".join(RESI_THREE_TO_1[res] for res in group) for group in batch["residues"]
+        ]
+        esm_data = [
+            (f"{batch['database'][i]}_{batch['id'][i]}", sequences[i])
+            for i in range(len(sequences))
+        ]
+        _, _, batch_tokens = self.batch_converter(esm_data)
+        return batch_tokens.to(device)
+
+
+class ESMSeqFeat(ESMFeat):
+    """Per-residue ESM embeddings from selected layers (FoldFlow style)."""
+
+    def __init__(
+        self,
+        esm_model_name,
+        esm_repr_layers,
+        **kwargs,
+    ):
+        super().__init__(
+            esm_model_name=esm_model_name,
+            esm_repr_layers=esm_repr_layers,
+            feat_type="seq",
+            device="cuda:0",
+            **kwargs,
+        )
+
+    @torch.no_grad()
+    def forward(self, batch: Dict):
+        batch_tokens = self.get_tokens(batch=batch, device=self.device)
+        res = self.model(
+            batch_tokens,
+            repr_layers=self.repr_layers,
+            need_head_weights=False,
+        )
+        reprs = torch.stack(
+            [r for _, r in sorted(res["representations"].items())], dim=2
+        )
+        reprs = reprs[:, 1:-1]  # remove BOS/EOS, [b, n, num_repr_layers, embed_dim]
+        b, n, nl, ed = reprs.shape
+        # Reshape to [b, n, num_repr_layers * embed_dim]
+        return reprs.reshape(b, n, nl * ed).to(batch["x_t"].device)
+
+
+class ESMAttnMapFeat(ESMFeat):
+    """Pairwise ESM features from attention maps of all layers and heads (FoldFlow style)."""
+
+    def __init__(
+        self,
+        esm_model_name,
+        esm_repr_layers,
+        **kwargs,
+    ):
+        super().__init__(
+            esm_model_name=esm_model_name,
+            esm_repr_layers=esm_repr_layers,
+            feat_type="pair",
+            device="cuda:0",
+            **kwargs,
+        )
+
+    @torch.no_grad()
+    def forward(self, batch: Dict):
+        batch_tokens = self.get_tokens(batch=batch, device=self.device)
+        res = self.model(
+            batch_tokens,
+            repr_layers=self.repr_layers,
+            need_head_weights=True,
+        )
+        # [batch, num_repr_layers, num_heads, L, L] -> [batch, L, L, num_repr_layers * num_heads]
+        attn = res["attentions"].permute(0, 4, 3, 1, 2)
+        attn = attn.flatten(3, 4)  # [b, L, L, num_repr_layers * num_heads]
+        attn = attn[:, 1:-1, 1:-1, :]  # strip BOS/EOS
+        return attn.to(batch["x_t"].device)
+
+
 ####################################
 # # Class that produces features # #
 ####################################
@@ -615,6 +774,8 @@ class FeatureFactory(torch.nn.Module):
                 return MotifX1SeqFeat(**kwargs)
             elif f == "motif_sequence_mask":
                 return MotifMaskSeqFeat(**kwargs)
+            elif f == "esm_seq":
+                return ESMSeqFeat(**kwargs)
             else:
                 raise IOError(f"Sequence feature {f} not implemented.")
 
@@ -631,6 +792,8 @@ class FeatureFactory(torch.nn.Module):
                 return MotifX1PairwiseDistancesPairFeat(**kwargs)
             elif f == "motif_structure_mask":
                 return MotifStructureMaskFeat(**kwargs)
+            elif f == "esm_attn_map":
+                return ESMAttnMapFeat(**kwargs)
             else:
                 raise IOError(f"Pair feature {f} not implemented.")
 
