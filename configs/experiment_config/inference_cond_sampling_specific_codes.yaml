@@ -8,7 +8,7 @@ ckpt_name: proteina_v1.1_DFS_200M_tri.ckpt
 
 self_cond: False
 fold_cond: True
-cath_code_level: "C"  # Guidance level -- C, A, or T
+cath_code_level: "T"  # Guidance level -- C, A, or T
 
 # Uncomment this line for long len proteins [50, 250] residues
 len_cath_code_path: ${oc.env:DATA_PATH}/metric_factory/features/D_FS_afdb_cath_codes.pth

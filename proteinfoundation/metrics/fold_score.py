@@ -17,7 +17,7 @@ from torchmetrics.utilities import rank_zero_warn
 from torchmetrics.utilities.data import dim_zero_cat
 
 
-class ProteinInceptionScore(Metric):
+class ProteinFoldScore(Metric):
 
     is_differentiable: bool = False
     higher_is_better: bool = True
@@ -32,17 +32,17 @@ class ProteinInceptionScore(Metric):
         **kwargs: Any,
     ) -> None:
         """
-        Calculate Inception Score which is used to access the quality of protein structures.
+        Calculate Fold Score which is used to access the quality of protein structures.
 
         Args:
-            splits (int): Integer determining how many splits the inception score calculation should be split among.
+            splits (int): Integer determining how many splits the fold score calculation should be split among.
                 Defaults to 10.
 
         """
         super().__init__(**kwargs)
 
         rank_zero_warn(
-            "Metric `InceptionScore` will save all extracted features in buffer."
+            "Metric `FoldScore` will save all extracted features in buffer."
             " For large datasets this may lead to large memory footprint.",
             UserWarning,
         )
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     total_sample = 65536
     num_experiment = 10
 
-    metric = ProteinInceptionScore(splits=10)
+    metric = ProteinFoldScore(splits=10)
 
     # Balanced and high confidence dataset
     for i in range(num_experiment):
@@ -99,7 +99,7 @@ if __name__ == "__main__":
         is_mean, is_std = metric.compute()
         print(
             i,
-            "Inception Score for balanced and high confidence dataset: %.5f +- %.5f"
+            "Fold Score for balanced and high confidence dataset: %.5f +- %.5f"
             % (is_mean, is_std),
         )
         metric.reset()
@@ -112,7 +112,7 @@ if __name__ == "__main__":
         is_mean, is_std = metric.compute()
         print(
             i,
-            "Inception Score for balanced but low confidence dataset: %.5f +- %.5f"
+            "Fold Score for balanced but low confidence dataset: %.5f +- %.5f"
             % (is_mean, is_std),
         )
         metric.reset()
@@ -127,7 +127,7 @@ if __name__ == "__main__":
         is_mean, is_std = metric.compute()
         print(
             i,
-            "Inception Score for skewed but high confidence dataset: %.5f +- %.5f"
+            "Fold Score for skewed but high confidence dataset: %.5f +- %.5f"
             % (is_mean, is_std),
         )
         metric.reset()
@@ -141,7 +141,7 @@ if __name__ == "__main__":
         is_mean, is_std = metric.compute()
         print(
             i,
-            "Inception Score for skewed and low confidence dataset: %.5f +- %.5f"
+            "Fold Score for skewed and low confidence dataset: %.5f +- %.5f"
             % (is_mean, is_std),
         )
         metric.reset()
