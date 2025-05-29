@@ -161,6 +161,8 @@ class AngleResnet(nn.Module):
 class InvariantPointAttention(nn.Module):
     """
     Implements Algorithm 22.
+
+    TODO: compare with FoldFlow implementation (rigid etc.)
     """
     def __init__(
         self,

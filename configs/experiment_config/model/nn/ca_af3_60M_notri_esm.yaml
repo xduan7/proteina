@@ -22,7 +22,7 @@ feats_init_seq: ["res_seq_pdb_idx", "chain_break_per_res", "x_sc", "esm_seq"]  #
 feats_cond_seq: ["time_emb", "fold_emb"]  # Sequence features to include in conditioning variables
 
 
-# Parameters for the features we extract (both for sequence representatoin and conditioning vector)
+# Parameters for the features we extract (both for sequence representation and conditioning vector)
 t_emb_dim: 256  # dimension of the time embedding
 dim_cond: 512  # dimension of conditioning vector
 idx_emb_dim: 128  # dimension of the sequence position [0, 1, 2, ...] (if contiguous residues) embeddings
@@ -63,7 +63,7 @@ pair_repr_dim: 256
 
 # Newer stuff for exploration
 update_pair_repr: False  # whether to update pair representation, automatically overridden to False if `use_attn_pair_bias: False`
-update_pair_repr_every_n: 2  # Update the pair representation every n layers -> For 15 layers we get 5 pair updates (if update pair represnetation is true)
+update_pair_repr_every_n: 2  # Update the pair representation every n layers -> For 15 layers we get 5 pair updates (if update pair representation is true)
 use_tri_mult: False  # whether to use triangular multiplication layers in pair update, ignored if not updating pair representation
 
 num_registers: 10

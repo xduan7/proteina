@@ -35,3 +35,4 @@ dependencies:
     - cpdb-protein
     - loralib
     - biopython
+    - fair-esm
