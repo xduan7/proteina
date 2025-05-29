@@ -30,6 +30,6 @@ metric_factory:
     real_features_path: ${oc.env:DATA_PATH}/metric_factory/features/D_FS_eval_ca_features.pth
     ca_only: True
     prefix: AFDB_
-  - metrics: ["IS_C", "IS_A", "IS_T"]
+  - metrics: ["fS_C", "fS_A", "fS_T"]
     ckpt_path: ${oc.env:DATA_PATH}/metric_factory/model_weights/gearnet_ca.pth
     ca_only: True
