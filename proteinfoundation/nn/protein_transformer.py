@@ -32,6 +32,86 @@ from proteinfoundation.nn.alphafold3_pytorch_utils.modules import (
 )
 
 
+class SequenceToCoordinates(torch.nn.Module):
+    """Updates coordinates from sequence."""
+
+    def __init__(self, dim_token):
+        super().__init__()
+        self.ln = torch.nn.LayerNorm(dim_token)
+        self.linear = torch.nn.Linear(dim_token, 3)
+
+    def forward(self, seqs, x_t, mask):
+        """
+        Args:
+            seqs: Input sequence representation, shape [b, n, token_dim]
+            x_t: Input coordinates, shape [b, n, 3]
+            mask: binary mask, shape [b, n]
+
+        Returns:
+            Updated (masked) coordinates
+        """
+        delta_x = self.linear(self.ln(seqs))  # [b, n, 3]
+        x_t = x_t + delta_x
+        return x_t * mask[..., None]
+
+
+class CoordinatesToSequenceLinear(torch.nn.Module):
+    """Updates sequence using linear layer from coordinates."""
+
+    def __init__(self, dim_token):
+        super().__init__()
+        self.linear = torch.nn.Linear(3, dim_token, bias=False)
+        self.ln = torch.nn.LayerNorm(dim_token)
+
+    def forward(self, seqs, x_t, mask):
+        """
+        Args:
+            seqs: Input sequence representation, shape [b, n, token_dim]
+            x_t: Input coordinates, shape [b, n, 3]
+            mask: binary mask, shape [b, n]
+
+        Returns:
+            Updated (masked) sequence
+        """
+        delta_seq = self.ln(self.linear(x_t))
+        seqs = seqs + delta_seq
+        return seqs * mask[..., None]
+
+
+class CoordinatesToSequenceIPA(torch.nn.Module):
+    """Updates sequence using IPA from coordinates (and identity rotations)."""
+
+    def __init__(
+        self, dim_token, dim_pair, c_hidden=16, nheads=8, no_qk_points=8, no_v_points=12
+    ):
+        super().__init__()
+        self.ipa = InvariantPointAttention(
+            c_s=dim_token,
+            c_z=dim_pair,
+            c_hidden=c_hidden,
+            no_heads=nheads,
+            no_qk_points=no_qk_points,
+            no_v_points=no_v_points,
+        )
+
+    def forward(self, seqs, pair_rep, x_t, mask):
+        """
+        Args:
+            seqs: Input sequence representation, shape [b, n, token_dim]
+            pair_rep: Pair representation, shape [b, n, n, pair_dim]
+            x_t: Input coordinates, shape [b, n, 3]
+            mask: binary mask, shape [b, n]
+
+        Returns:
+            Updated sequence, shape [b, n, dim_token]
+        """
+        x_t = x_t * mask[..., None]
+        r = Rigid(trans=x_t, rots=None)  # Rotations default to identity
+        delta_seqs = self.ipa(s=seqs, z=pair_rep, r=r, mask=mask * 1.0)
+        seqs = seqs + delta_seqs
+        return seqs * mask[..., None]  # [b, n, token_dim]
+
+
 class MultiHeadAttention(torch.nn.Module):
     """Typical multi-head self-attention attention using pytorch's module."""
 
@@ -462,8 +542,10 @@ class ProteinTransformerAF3(torch.nn.Module):
         self.pair_repr_dim = kwargs["pair_repr_dim"]
         self.update_coors_on_the_fly = kwargs.get(
             "update_coors_on_the_fly", False
-        )
-        self.update_seq_with_coors = None
+        )  # For backward compat
+        self.update_seq_with_coors = kwargs.get(
+            "update_seq_with_coors", None
+        )  # For backward compat, None, linear or IPA, only used if coors on the fly
         self.update_pair_repr = kwargs.get(
             "update_pair_repr", False
         )
@@ -567,6 +649,27 @@ class ProteinTransformerAF3(torch.nn.Module):
                         kwargs["pair_repr_dim"], self.num_buckets_predict_pair
                     ),
                 )
+
+        # Coors on the fly
+        if self.update_coors_on_the_fly:
+            self.seq_to_coors = torch.nn.ModuleList([
+                SequenceToCoordinates(dim_token=kwargs["token_dim"])
+                for _ in range(self.nlayers)
+            ])
+            # Coors to seq
+            if self.update_seq_with_coors == "linear" or self.update_seq_with_coors == "linearipa":
+                self.coors_to_seq_linear = torch.nn.ModuleList([
+                    CoordinatesToSequenceLinear(dim_token=kwargs["token_dim"])
+                    for _ in range(self.nlayers)
+                ])
+            if self.update_seq_with_coors == "ipa" or self.update_seq_with_coors == "linearipa":
+                self.coors_to_seq_ipa = torch.nn.ModuleList([
+                    CoordinatesToSequenceIPA(
+                        dim_token=kwargs["token_dim"],
+                        dim_pair=kwargs["pair_repr_dim"],
+                    )
+                    for _ in range(self.nlayers)
+                ])
 
         self.coors_3d_decoder = torch.nn.Sequential(
             torch.nn.LayerNorm(kwargs["token_dim"]),
@@ -679,6 +782,16 @@ class ProteinTransformerAF3(torch.nn.Module):
         # Apply registers
         seqs, pair_rep, mask, c = self._extend_w_registers(seqs, pair_rep, mask, c)
 
+        if self.update_coors_on_the_fly and self.num_registers > 0:
+            pad = torch.zeros(
+                coors_3d.shape[0],
+                self.num_registers,
+                coors_3d.shape[2],
+                dtype=coors_3d.dtype,
+                device=coors_3d.device,
+            )
+            coors_3d = torch.cat([pad, coors_3d], dim=1)
+
         # Run trunk
         for i in range(self.nlayers):
             seqs = self.transformer_layers[i](
@@ -691,6 +804,16 @@ class ProteinTransformerAF3(torch.nn.Module):
                         pair_rep = self.pair_update_layers[i](
                             seqs, pair_rep, mask
                         )  # [b, n, n, pair_dim]
+
+            # Coors on the fly
+            if self.update_coors_on_the_fly:
+                # update coordinates
+                coors_3d = self.seq_to_coors[i](seqs, coors_3d, mask)
+                # update sequence with coordinates
+                if self.update_seq_with_coors == "linear" or self.update_seq_with_coors == "linearipa":
+                    seqs = self.coors_to_seq_linear[i](seqs, coors_3d, mask)
+                if self.update_seq_with_coors == "ipa" or self.update_seq_with_coors == "linearipa":
+                    seqs = self.coors_to_seq_ipa[i](seqs, pair_rep, coors_3d, mask)
 
         # Undo registers
         seqs, pair_rep, mask = self._undo_registers(seqs, pair_rep, mask)

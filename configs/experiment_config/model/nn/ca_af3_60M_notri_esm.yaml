@@ -70,3 +70,6 @@ num_registers: 10
 use_qkln: True
 
 num_buckets_predict_pair: 64
+
+update_coors_on_the_fly: true  # Enable coordinate updates and IPA integration
+update_seq_with_coors: ipa     # Options: 'linear', 'ipa', or 'linearipa'
